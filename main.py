@@ -115,7 +115,7 @@ raw_history = deque(maxlen=30)
 smooth_history = deque(maxlen=30)
  
 pinched = False
-PINCH_ON = 0.30
+PINCH_ON = 0.20
 PINCH_OFF = 0.50
  
 # Mouse control starts OFF so the cursor doesn't run away at launch.

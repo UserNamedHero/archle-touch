@@ -60,7 +60,7 @@ Press `c` when you're ready. Pinch to click, hold the pinch to drag. If the curs
 These are constants near the top of `main.py` and in the loop:
 
 - `POINTER_LANDMARK`: 8 is the index fingertip. If the cursor jumps when I pinch, 5 (the knuckle) moves less.
-- `ALPHA`: smoothing. Lower is steadier but laggier. I'm using 0.35.
+- `ALPHA`: smoothing. Lower is steadier but laggier. I'm using 0.20.
 - `PINCH_ON` / `PINCH_OFF`: pinch thresholds. Keep `OFF` well above `ON`.
 - `MARGIN`: how much of the camera frame to ignore around the edges.
 
