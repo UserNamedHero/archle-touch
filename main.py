@@ -1,10 +1,11 @@
+
 from collections import deque
 import statistics
 import cv2
 import time
 import mediapipe as mp
 import math
-
+ 
 MARGIN = 0.15
 # Active rectangle, in normalized (0-1) frame coordinates
 X_LOW, X_HIGH = MARGIN, 1 - MARGIN
@@ -36,7 +37,6 @@ cv2.resizeWindow("Camera", 2*w, 2*h)
 hand_landmarker = HandLandmarker.create_from_options(options)
  
 def remap(value, low, high):
-
     remapped = (value - low) / (high - low)
  
     # Clamp the result between 0.0 and 1.0
@@ -47,6 +47,29 @@ def smooth(prev, new, alpha):
         return new
     return prev + alpha * (new - prev)
  
+def to_px(lm, w, h):
+    return (lm.x * w, lm.y * h)
+ 
+def dist(a, b):
+    return math.hypot(a[0] - b[0], a[1] - b[1])
+ 
+def pinch_ratio(hand, w, h):
+    thumb = to_px(hand[4], w, h)
+    index = to_px(hand[8], w, h)
+    wrist = to_px(hand[0], w, h)
+    knuckle = to_px(hand[5], w, h)  # landmark 5 = index knuckle (your readings used this one)
+    size = dist(wrist, knuckle)
+    return dist(thumb, index) / max(size, 1e-6)  # Avoid division by zero
+ 
+def update_pinch(pinched, ratio, on, off):
+    if not pinched:
+        if ratio < on:
+            return True
+    else:
+        if ratio > off:
+            return False
+    return pinched
+ 
 # before the loop
 sx = None
 sy = None
@@ -55,6 +78,14 @@ ALPHA = 0.35
 # pstdev needs a list of plain numbers, so we don't store (x, y) tuples.
 raw_history = deque(maxlen=30)
 smooth_history = deque(maxlen=30)
+ 
+# Pinch state. Thresholds come from my readings:
+#   open ~0.90, touching ~0.15, near/far spread ~0.10-0.20
+# PINCH_ON sits just above the highest "touching" reading,
+# PINCH_OFF is well above PINCH_ON but well below "open".
+pinched = False
+PINCH_ON = 0.20
+PINCH_OFF = 0.50
  
 while True:
     # Previous time
@@ -107,16 +138,30 @@ while True:
         raw_history.append(rx)
         smooth_history.append(sx)
  
+        # Pinch detection. This must live INSIDE the hand block: `hand`
+        # only exists when a hand was detected this frame.
+        ratio = pinch_ratio(hand, w, h)
+        pinched = update_pinch(pinched, ratio, PINCH_ON, PINCH_OFF)
+ 
         # Raw position in the inset (red) vs smoothed position (yellow).
         raw_dot = (int(INSET_X + rx * INSET_W), int(INSET_Y + ry * INSET_H))
         dot = (int(INSET_X + sx * INSET_W), int(INSET_Y + sy * INSET_H))
         cv2.circle(frame, raw_dot, 4, (0, 0, 255), -1)
-        cv2.circle(frame, dot, 5, (0, 255, 255), -1)
+        # The smoothed dot turns magenta while pinched.
+        dot_color = (255, 0, 255) if pinched else (0, 255, 255)
+        cv2.circle(frame, dot, 5, dot_color, -1)
  
-        # Draw a green dot on the index finger tip.
+        # Draw a dot on the index fingertip: green normally, red while pinched.
         # cv2.circle needs integer PIXELS, so convert from normalized first.
         finger_px = (int(index_finger_tip.x * w), int(index_finger_tip.y * h))
-        cv2.circle(frame, finger_px, 10, (0, 255, 0), -1)
+        finger_color = (0, 0, 255) if pinched else (0, 255, 0)
+        cv2.circle(frame, finger_px, 10, finger_color, -1)
+ 
+        cv2.putText(frame, f"Pinch Ratio: {ratio:.2f}", (10, 110),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+        if pinched:
+            cv2.putText(frame, "PINCHED", (10, 145),
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 3)
  
         # Jitter measurement (needs at least 2 samples). Scaled x1000 for readability.
         if len(raw_history) > 1:
@@ -132,6 +177,9 @@ while True:
         sy = None
         raw_history.clear()
         smooth_history.clear()
+        # Never leave a pinch "held" when the hand disappears: once this
+        # drives the mouse, that would mean a stuck button.
+        pinched = False
  
     # FPS calculation and Display
     elapsed_time = time.time() - previous_time
@@ -153,4 +201,3 @@ while True:
 hand_landmarker.close()
 cap.release()
 cv2.destroyAllWindows()
- 
