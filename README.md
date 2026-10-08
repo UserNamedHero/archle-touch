@@ -76,3 +76,7 @@ These are constants near the top of `main.py` and in the loop:
 - Right click and scroll gestures
 - One Euro filter instead of the plain moving average
 - A "pause" gesture instead of the keyboard toggle
+
+## FAQ
+- Q: Will you make a Windows or Mac version?
+- A: Making a Windows version is definitely on the table. I don't own a Mac, so it may get its separate release a lot later.
